@@ -90,12 +90,23 @@ def main():
     resp = s.get(SEARCH_URL)
     soup = BeautifulSoup(resp.text, "html.parser")
     payload = get_hidden_fields(soup)
-    # districts=find_districts(soup)
+    all_districts=find_districts(soup)
     # print(districts)
-    districts=[{'district_code': '045', 'district_name': 'अल्मोड़ा'}]
+    # districts=[{'district_code': '045', 'district_name': 'अल्मोड़ा'}]
+    # all_districts=districts
+    for index, item in enumerate(all_districts):
+        print(f"{index}: {item}")
+    select = int(input("Select a valid index: "))
+    districts=[]
+    if 0 <= select < len(all_districts):
+        districts.append(all_districts[select])
+        print("new list", districts)
+    else:
+        print("Invalid index")
+
     for district in districts:
-        # print(district["district_code"])
-        # print(district["district_name"])
+        print(district["district_code"])
+        print(district["district_name"])
         print(f"IN {district['district_name']}")
         payload.update({
         "__EVENTTARGET": "ctl00$ContentPlaceHolder1$ddlDistrict",
@@ -121,18 +132,19 @@ def main():
             gps=find_gps(soup)
             for gp in gps:
                 print(f"IN {gp['gp_name']}")
-                payload.update({
+                gp_request_payload = payload.copy()
+                gp_request_payload.update({
                     "__EVENTTARGET": "ctl00$ContentPlaceHolder1$ddlGramPanchayat",
                     "ctl00$ContentPlaceHolder1$ddlDistrict": district["district_code"],
                     "ctl00$ContentPlaceHolder1$ddlBlock": block["block_code"],
                     "ctl00$ContentPlaceHolder1$ddlGramPanchayat": gp["gp_code"]
                 })
-                resp = s.post(SEARCH_URL, data=payload)
+                
+                resp = s.post(SEARCH_URL, data=gp_request_payload)
                 soup = BeautifulSoup(resp.text, "html.parser")
                 payload = get_hidden_fields(soup)
 
-                gp_soup = soup 
-                gp_payload= payload.copy()
+                
 
                 pollings=find_pollings(soup)
 
@@ -147,13 +159,17 @@ def main():
                             print(f"        attempt {attempt}/{retries}...")
 
                         try:
-                            current_soup = BeautifulSoup(str(gp_soup), "html.parser")
-                            current_payload = gp_payload.copy()
+                            if attempt > 1:
+                                resp = s.post(SEARCH_URL, data=gp_request_payload)
+                                soup = BeautifulSoup(resp.text, "html.parser")
+                                payload = get_hidden_fields(soup)
+                    
+                            current_payload = payload.copy()
                             
-                            captcha_divs = current_soup.find_all("div", class_="captcha")
+                            captcha_divs = soup.find_all("div", class_="captcha")
                             if len(captcha_divs) < 2:
-                                print("        ! Error: Captcha missing on page.")
-                                continue 
+                                print("        ! Search Captcha missing (Page Load Error).")
+                                continue
                                 
                             search_captcha_url = captcha_divs[1].find("img")["src"]
                             captcha_text = solve_captcha(s, search_captcha_url)
@@ -171,8 +187,7 @@ def main():
                             search_resp = s.post(SEARCH_URL, data=current_payload, timeout=30)
                             
                             if "GridView1" not in search_resp.text:
-                                print("        ! search failed (wrong captcha).")
-                                continue
+                                continue 
                             
                             search_soup = BeautifulSoup(search_resp.text, "html.parser")
                             search_payload = get_hidden_fields(search_soup)
@@ -195,7 +210,7 @@ def main():
                             
                             modal_captcha_divs = modal_soup.find_all("div", class_="captcha")
                             if not modal_captcha_divs:
-                                print("        ! Modal Captcha not found.")
+                                print("         Modal Captcha not found.")
                                 continue 
                                 
                             modal_captcha_url = modal_captcha_divs[0].find("img")["src"]
@@ -238,10 +253,10 @@ def main():
                                 else:
                                     print("        Download Failed: HTML returned ( Wrong Modal Captcha ig)")
                             else:
-                                print(f"         HTTP Error: {pdf_resp.status_code}")
+                                print(f"         HTTP Error {pdf_resp.status_code}")
                                 
                         except requests.exceptions.RequestException as e:
-                            print(f"        ! Network Error: {e}")
+                            print(f"         Network Error: {e}")
                     
                     if not success:
                         print(f"       GAVE UP on {polling['polling_name']}")
