@@ -80,13 +80,32 @@ def solve_captcha(session, img_relative_url):
         print("   Failed to download captcha image.")
         return ""
 
+def log(dname,bname,gpname,pollingname,dcode,bcode,gpcode,pollingcode):
+    
+    log = "sec uk captcha/failed_downloads.csv"
+    file_exists = os.path.isfile(log)
+        
+    try:
+        with open(log, "a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            
+            if not file_exists:
+                writer.writerow(["District Name", "Block Name", "GP Name", "PS Name", "Dist Code", "Block Code", "GP Code", "PS Code"])
+            
+            writer.writerow([dname,bname,gpname,pollingname,dcode,bcode,gpcode,pollingcode
+            ])
+            print(f"       logged to {log}")
+    except Exception as e:
+            print(f"      Error writing to log: {e}")
+
+
 def main():
     s = requests.Session()
     s.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     })
 
-    print("1. page load ---")
+    print("1. page load")
     resp = s.get(SEARCH_URL)
     soup = BeautifulSoup(resp.text, "html.parser")
     payload = get_hidden_fields(soup)
@@ -144,9 +163,12 @@ def main():
                 soup = BeautifulSoup(resp.text, "html.parser")
                 payload = get_hidden_fields(soup)
 
-                
-
                 pollings=find_pollings(soup)
+                if len(pollings) == 0:
+                    print(f"       GAVE UP on {polling['polling_name']}")
+                    log(district['district_name'],block['block_name'],gp['gp_name'],polling['polling_name'],district['district_code'],block['block_code'],gp['gp_code'],polling['polling_code'])
+                    
+
 
                 for polling in pollings:
                     print(f"IN {polling['polling_name']}")
